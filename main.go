@@ -7,6 +7,7 @@ import (
 	"generador-certificados/scraping"
 	"generador-certificados/word"
 	"os"
+	"regexp"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -139,8 +140,12 @@ func main() {
 	)
 
 	tabs.SetTabLocation(container.TabLocationLeading)
+
+	toolbar := createToolbar(myApp, myWindow)
+	content := container.NewBorder(toolbar, nil, nil, nil, tabs)
+
 	myWindow.Resize(fyne.NewSize(300, 600))
-	myWindow.SetContent(tabs)
+	myWindow.SetContent(content)
 	myWindow.ShowAndRun()
 }
 
@@ -149,9 +154,20 @@ func createTesisTab(myApp fyne.App, myWindow fyne.Window) *fyne.Container {
 	// Card de información
 	card := createInfoCard()
 
-	// Entrada de texto
+	// Entrada de texto con validación
 	uuid := widget.NewEntry()
 	uuid.SetPlaceHolder("Escribe la URL del trabajo de titulación aquí...")
+
+	// Validador para la entrada de UUID
+	uuid.Validator = func(input string) error {
+		// Expresión regular para validar la estructura de la URL
+		regex := `^https://dspace\.ucuenca\.edu\.ec/items/[a-f0-9\-]{36}$`
+		matched, _ := regexp.MatchString(regex, input)
+		if !matched {
+			return fmt.Errorf("La URL debe tener el formato:\nhttps://dspace.ucuenca.edu.ec/items/ae74c58d-13d2-4049-bc63-56b41bf6d478")
+		}
+		return nil
+	}
 
 	// Selectores
 	tituloSelect := widget.NewLabel("Selecciona el tipo de estudio:")
@@ -180,7 +196,73 @@ func createTesisTab(myApp fyne.App, myWindow fyne.Window) *fyne.Container {
 	progressbar := widget.NewProgressBarInfinite()
 	progressbar.Hide()
 
-	botonCrearCertificado := createCertificadoButton(myApp, uuid, selectStudy, entryPosgrado, selectorPersona, progressbar)
+	botonCrearCertificado := widget.NewButton("Crear Certificado", func() {
+		hdl := uuid.Text
+		estudio := selectStudy.Selected
+		referencista := selectorPersona.Selected
+
+		// Validar el UUID
+		if err := uuid.Validate(); err != nil {
+			showErrorWindow(myApp, err)
+			return
+		}
+
+		if selectStudy.Selected == "Posgrado" && entryPosgrado.Text == "" {
+			showErrorWindow(myApp, fmt.Errorf("El campo de posgrado no puede estar vacío"))
+			progressbar.Hide()
+			return
+		}
+
+		if selectStudy.Selected == "Posgrado" {
+			estudio = entryPosgrado.Text
+		}
+
+		progressbar.Show()
+
+		// Canal para manejar errores
+		errChan := make(chan error, 1)
+
+		go func() {
+			defer progressbar.Hide()
+			resultado, err := scraping.Scrapper(hdl, estudio)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			err = word.CreateWordDocument(resultado, estudio, referencista)
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			for _, person := range resultado {
+				_, err := database.AddRegistro(&database.Registro{
+					Author:        person.Author,
+					Handle:        person.URI,
+					Facultad:      person.Facultad,
+					Carrera:       person.Carrera,
+					Fecha:         time.Now().Format("2006-01-02"),
+					Bibliotecario: referencista,
+				})
+				if err != nil {
+					errChan <- err
+					return
+				}
+			}
+
+			errChan <- nil
+		}()
+
+		// Manejar errores desde el canal
+		go func() {
+			if err := <-errChan; err != nil {
+				showErrorWindow(myApp, err)
+			}
+		}()
+
+		uuid.SetText("") // Limpia el campo de entrada
+	})
 	cerrarButton := widget.NewButton("Cerrar", func() {
 		myWindow.Close()
 	})
@@ -408,71 +490,6 @@ func createInfoCard() *fyne.Container {
 		icono,
 		widget.NewCard("Generador de Certificados", "Versión: 2.0", contenidoCard),
 	)
-}
-
-// Crear el botón para generar certificados
-func createCertificadoButton(myApp fyne.App, uuid *widget.Entry, selectStudy *widget.Select, entryPosgrado *widget.Entry, selectorPersona *widget.Select, progressbar *widget.ProgressBarInfinite) *widget.Button {
-	return widget.NewButton("Crear Certificado", func() {
-		hdl := uuid.Text
-		estudio := selectStudy.Selected
-		referencista := selectorPersona.Selected
-
-		if selectStudy.Selected == "Posgrado" && entryPosgrado.Text == "" {
-			showErrorWindow(myApp, fmt.Errorf("el campo de posgrado no puede estar vacío"))
-			progressbar.Hide()
-			return
-		}
-
-		if selectStudy.Selected == "Posgrado" {
-			estudio = entryPosgrado.Text
-		}
-
-		progressbar.Show()
-
-		// Canal para manejar errores
-		errChan := make(chan error, 1)
-
-		go func() {
-			defer progressbar.Hide()
-			resultado, err := scraping.Scrapper(hdl, estudio)
-			if err != nil {
-				errChan <- err
-				return
-			}
-
-			err = word.CreateWordDocument(resultado, estudio, referencista)
-			if err != nil {
-				errChan <- err
-				return
-			}
-
-			for _, person := range resultado {
-				_, err := database.AddRegistro(&database.Registro{
-					Author:        person.Author,
-					Handle:        person.URI,
-					Facultad:      person.Facultad,
-					Carrera:       person.Carrera,
-					Fecha:         time.Now().Format("2006-01-02"),
-					Bibliotecario: referencista,
-				})
-				if err != nil {
-					errChan <- err
-					return
-				}
-			}
-
-			errChan <- nil
-		}()
-
-		// Manejar errores desde el canal
-		go func() {
-			if err := <-errChan; err != nil {
-				showErrorWindow(myApp, err)
-			}
-		}()
-
-		uuid.SetText("") // Limpia el campo de entrada
-	})
 }
 
 // Mostrar ventana de error
@@ -1002,4 +1019,53 @@ func certificadosMasivosButton(myApp fyne.App, name *widget.Entry, selectStudy *
 			}
 		}()
 	})
+}
+
+func createToolbar(myApp fyne.App, myWindow fyne.Window) *widget.Toolbar {
+	return widget.NewToolbar(
+		widget.NewToolbarSpacer(), // Espaciador para alinear los botones a la derecha
+		widget.NewToolbarAction(theme.HelpIcon(), func() {
+			// Mostrar ventana de ayuda
+			helpWindow := myApp.NewWindow("Ayuda")
+			helpContent := widget.NewLabel("Esta aplicación permite generar certificados de no adeudar material bibliográfico.\n\n" +
+				"1. Ve a la pestaña 'Tesis' para generar certificados individuales, usa la URL de la tesis en Dspace.\n" +
+				"2. Ve a la pestaña 'Masivos' para generar certificados desde un archivo CSV.\n" +
+				"3. Usa la pestaña 'Buscar Certificado' para buscar certificados existentes.\n" +
+				"4. Usa la pestaña 'Exportar por Fecha' para exportar registros a un archivo CSV.\n\n" +
+				"Si necesitas más ayuda, contacta al administrador.")
+			helpContent.Wrapping = fyne.TextWrapWord
+
+			helpWindow.SetContent(container.NewVBox(
+				helpContent,
+				widget.NewButton("Cerrar", func() {
+					helpWindow.Close()
+				}),
+			))
+			helpWindow.Resize(fyne.NewSize(400, 300))
+			helpWindow.Show()
+		}),
+		widget.NewToolbarAction(theme.InfoIcon(), func() {
+			// Mostrar ventana de información
+			infoWindow := myApp.NewWindow("Información")
+			infoContent := widget.NewLabel("Desarrollado por: Luis Enrique Lescano\n\n" +
+				"Esta aplicación fue creada utilizando las siguientes tecnologías:\n\n" +
+				"- Lenguaje: Go (Golang)\n" +
+				"- Framework de interfaz gráfica: Fyne\n" +
+				"- Generación de documentos Word: Go-Docx\n" +
+				"- Base de datos local: SQLite\n\n" +
+				"Versión: 2.0\n\n" +
+				"Si tienes preguntas o sugerencias, contacta al desarrollador en:\n" +
+				"luis575497@gmail.com")
+			infoContent.Wrapping = fyne.TextWrapWord
+
+			infoWindow.SetContent(container.NewVBox(
+				infoContent,
+				widget.NewButton("Cerrar", func() {
+					infoWindow.Close()
+				}),
+			))
+			infoWindow.Resize(fyne.NewSize(400, 400)) // Tamaño cuadrado de 400x400
+			infoWindow.Show()
+		}),
+	)
 }
