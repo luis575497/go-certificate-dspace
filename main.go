@@ -422,7 +422,7 @@ func createCertificadoComplexivoButton(myApp fyne.App, name *widget.Entry, selec
 		// Crear el objeto del estudiante
 		estudiante := scraping.Person{
 			Author:   nameEstudiante,
-			URI:      "", // No se utiliza en este caso
+			URI:      "Exámen Complexivo",
 			Facultad: facultadSeleccionada,
 			Carrera:  carreraSeleccionada,
 		}
