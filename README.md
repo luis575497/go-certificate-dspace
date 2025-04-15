@@ -1,8 +1,7 @@
-# Generador de Certificados
-
-Este proyecto es una aplicación de escritorio desarrollada en Go utilizando el framework [Fyne](https://fyne.io/). La aplicación permite generar certificados de no adeudar material bibliográfico para estudiantes de la Universidad de Cuenca.
-
 ![Generador de Certificados](generador-imagen.png)
+
+# Generador de Certificados
+Este proyecto es una aplicación de escritorio desarrollada en Go utilizando el framework [Fyne](https://fyne.io/). La aplicación permite generar certificados de no adeudar material bibliográfico para estudiantes de la Universidad de Cuenca.
 
 ## Características
 
@@ -93,7 +92,7 @@ generador-certificados/
 ├── main.go                  # Archivo principal de la aplicación
 ├── go.mod                   # Archivo de dependencias
 ├── go.sum                   # Suma de comprobación de dependencias
-├── generador-imagen.png     # Captura de pantalla del generador
+├── logoucuenca.png          # Logo para poner en el certificado
 └── README.md                # Documentación del proyecto
 ```
 
@@ -107,4 +106,4 @@ Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para má
 
 ## Contacto
 
-Si tienes preguntas o necesitas ayuda, puedes contactarme en [tu-email@ejemplo.com](mailto:tu-email@ejemplo.com).
+Si tienes preguntas o necesitas ayuda, puedes contactarme en [luis575497@gmail.com](mailto:luis575497@gmail.com).
