@@ -210,14 +210,21 @@ func CreateWordDocument(persons []scraping.Person, estudio string, referencista 
 		w.AddParagraph().AddText("").
 			Font("Arial", "Arial", "Arial", "Arial")
 
-		// 5. Enlace al repositorio
+		// 5. Enlace al repositorio o poner Examen Complexivo
 		w.AddParagraph().AddText("").
 			Font("Arial", "Arial", "Arial", "Arial")
 		pLink := w.AddParagraph()
 		pLink.Justification("start")
-		pLink.AddText(fmt.Sprintf("Link: %s", person.URI)).
-			Size("22").
-			Font("Arial", "Arial", "Arial", "Arial")
+
+		if person.URI == "" {
+			pLink.AddText("Certificado Complexivo").
+				Size("22").
+				Font("Arial", "Arial", "Arial", "Arial")
+		} else {
+			pLink.AddText(fmt.Sprintf("Link: %s", person.URI)).
+				Size("22").
+				Font("Arial", "Arial", "Arial", "Arial")
+		}
 
 		// Control de Versiones
 		w.AddParagraph().AddText("").
